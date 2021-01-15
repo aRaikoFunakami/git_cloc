@@ -1,0 +1,71 @@
+#!/bin/bash
+
+usage_exit() {
+    echo "Usage: $0 [--dir] SET" 1>&2
+    exit 1
+}
+
+while getopts ":dh-:" opt; do
+    case "$opt" in
+        -)
+            case "${OPTARG}" in
+                help)
+                    usage_exit
+                    ;;
+                dir)
+                    FLAG_DIR=1
+                    ;;
+            esac
+            ;;
+        d)
+            FLAG_DIR=1
+            ;;
+        h)
+            usage_exit
+            ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if [ $# -ne 1 ]; then
+    usage_exit
+    exit 1
+fi
+
+cloc_top(){
+    full_dir=`pwd`
+    d=`basename $full_dir`
+    cloc --git --quiet --csv --timeout=600 $1 | \
+    tail +3 | \
+    sed "s@^@$d,@" | \
+    sed 1i"dir, files, language, blank, comment, code"
+    exit 1
+}
+
+cloc_dir(){
+    tmp_subtree=$(mktemp)
+
+    # delete tmpfiles in trap
+    function rm_tmpfiles {
+    [[ -f "$tmp_subtree" ]] && rm -f "$tmp_subtree"
+    }
+    trap rm_tmpfiles EXIT
+
+    # making a tree_hash table for each directory from two commits
+    git ls-tree -d $1 | awk '{print $4, $3}'| sort -k1,1 > $tmp_subtree
+
+    # cloc --diff subtrees between two versions
+    cat $tmp_subtree | \
+    while read d h
+    do  
+        cloc --git --quiet --csv --timeout=600 $h | \
+        tail +3 | \
+        sed "s@^@$d,@"
+    done | sed 1i"dir, files, language, blank, comment, code"
+}
+
+if [ $FLAG_DIR ]; then
+    cloc_dir $1
+else
+    cloc_top $1
+fi
