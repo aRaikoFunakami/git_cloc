@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage_exit() {
-    echo "Usage: $0 [--dir] SET" 1>&2
+    echo "Usage: $0 [--dir] SET dir1 ... " 1>&2
     exit 1
 }
 
@@ -15,6 +15,12 @@ while getopts ":dh-:" opt; do
                 dir)
                     FLAG_DIR=1
                     ;;
+                csv)
+                    FLAG_CSV=1
+                    ;;
+                *)
+                    usage_exit
+                    ;;
             esac
             ;;
         d)
@@ -27,45 +33,100 @@ while getopts ":dh-:" opt; do
 done
 shift $((OPTIND - 1))
 
-if [ $# -ne 1 ]; then
-    usage_exit
-    exit 1
-fi
 
-cloc_top(){
-    full_dir=`pwd`
-    d=`basename $full_dir`
-    cloc --git --quiet --csv --timeout=600 $1 | \
-    tail +3 | \
-    sed "s@^@$d,@" | \
-    sed 1i"dir, files, language, blank, comment, code"
-    exit 1
+cloc_custom(){
+    # cloc_custom parent_dir:$1 tree_hash:$2
+    opt=" "
+    if [ $FLAG_CSV ]; then
+        opt="$opt --csv"
+        cloc --git --quiet --timeout=600 $opt $2 | \
+        tail +3 | \
+        sed "s@^@$1,@"
+    else
+        echo "$1"
+        cloc --git --quiet --timeout=600 $opt $2
+    fi
 }
 
-cloc_dir(){
+cloc_subdirs(){
+    # echo cloc_subdirs parent_dir:$1 dir:2
+    # tmp file setup
     tmp_subtree=$(mktemp)
 
-    # delete tmpfiles in trap
     function rm_tmpfiles {
     [[ -f "$tmp_subtree" ]] && rm -f "$tmp_subtree"
     }
     trap rm_tmpfiles EXIT
 
-    # making a tree_hash table for each directory from two commits
-    git ls-tree -d $1 | awk '{print $4, $3}'| sort -k1,1 > $tmp_subtree
+    # table of directory name and hash 
+    git ls-tree -d $2 | awk '{print $4, $3}'| sort -k1,1 > $tmp_subtree
 
-    # cloc --diff subtrees between two versions
+    # applying "cloc" command to directories
     cat $tmp_subtree | \
     while read d h
     do  
-        cloc --git --quiet --csv --timeout=600 $h | \
-        tail +3 | \
-        sed "s@^@$d,@"
-    done | sed 1i"dir, files, language, blank, comment, code"
+        cloc_custom "$1/$d" $h
+    done
 }
 
-if [ $FLAG_DIR ]; then
-    cloc_dir $1
-else
-    cloc_top $1
+
+cloc_dirs(){
+    # echo cloc_dirs parent_dir:$1 three_hash:$2 dirs:${@:3}
+    bdir=$1
+    tree_hash=$2
+    dirs=${@:3}
+
+    # tmp file setup
+    tmp_subtree=$(mktemp)
+
+    function rm_tmpfiles {
+    [[ -f "$tmp_subtree" ]] && rm -f "$tmp_subtree"
+    }
+    trap rm_tmpfiles EXIT
+
+    # table of directory name and hash 
+    git ls-tree -d $tree_hash | awk '{print $4, $3}'| sort -k1,1 > $tmp_subtree
+
+    for dir in $dirs; do
+        # remove "^./", "^/", and "/$"
+        dir=`echo $dir | sed 's@^\./@@g' | sed 's@^/@@g' | sed 's@/$@@g'`
+
+        if [ $dir = "." ]; then
+            cloc_custom $bdir $tree_hash
+        else
+            # if dir="a/b/c/d/e" => current=a, next=b/c/d/e"
+            current=${dir%%/*}
+            next=${dir#*/}
+            if [ $current == $dir ]; then
+                next=""
+            fi
+            # get "current" directory hash, and ...
+            grep -F $current $tmp_subtree | \
+            while read d h
+            do  
+                if [ "$next" = "" ]; then
+                    if [ $FLAG_DIR ]; then
+                        cloc_subdirs "$bdir/$d" $h
+                    else
+                        cloc_custom "$bdir/$d" $h
+                    fi
+                else
+                    cloc_dirs "$bdir/$d" $h $next
+                fi
+            done
+        fi
+    done
+}
+
+if [ $FLAG_CSV ]; then
+# heading line
+    echo "dir, files, language, blank, comment, code"
 fi
+
+# base directory name for exploring
+base_dir=`pwd`
+base_dir=`basename $base_dir`
+
+cloc_dirs $base_dir $@
+
+
