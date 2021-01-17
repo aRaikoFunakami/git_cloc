@@ -50,74 +50,46 @@ cloc_custom(){
     fi
 }
 
-cloc_subdirs(){
-    # echo cloc_subdirs parent_dir:$1 dir:2 1>&2
-    # tmp file setup
-    tmp_subtree=$(mktemp)
 
-    function rm_tmpfiles {
-    [[ -f "$tmp_subtree" ]] && rm -f "$tmp_subtree"
-    }
-    trap rm_tmpfiles EXIT
-
-    # table of directory name and hash 
-    git ls-tree -d $2 | awk '{print $4, $3}'| sort -k1,1 > $tmp_subtree
-
-    # applying "cloc" command to directories
-    cat $tmp_subtree | \
-    while read d h
-    do  
-        cloc_custom "$1/$d" $h
-    done
+git_ls_tree_dir(){
+    tree_hash=$1
+    git ls-tree -d $tree_hash | awk '{print $4, $3}'| sort -k1,1
 }
 
-
 cloc_dirs(){
-    # echo cloc_dirs parent_dir:$1 three_hash:$2 dirs:${@:3} 1>&2
-    bdir=$1
+    # echo "cloc_dirs parent_dir:$1 three_hash:$2 dir:$3" 1>&2
+    pdir=$1
     tree_hash=$2
-    dirs=${@:3}
+    dir=$3
 
-    # tmp file setup
-    tmp_subtree=$(mktemp)
-
-    function rm_tmpfiles {
-    [[ -f "$tmp_subtree" ]] && rm -f "$tmp_subtree"
-    }
-    trap rm_tmpfiles EXIT
-
-    # table of directory name and hash 
-    git ls-tree -d $tree_hash | awk '{print $4, $3}'| sort -k1,1 > $tmp_subtree
-
-    for dir in $dirs; do
-        # remove "^./", "^/", and "/$"
-        dir=`echo $dir | sed 's@^\./@@g' | sed 's@^/@@g' | sed 's@/$@@g'`
-
-        if [ $dir = "." ]; then
-            cloc_custom $bdir $tree_hash
-        else
-            # if dir="a/b/c/d/e" => current=a, next=b/c/d/e"
-            current=${dir%%/*}
-            next=${dir#*/}
-            if [ $current == $dir ]; then
-                next=""
-            fi
-            # get "current" directory hash, and ...
-            grep -F $current $tmp_subtree | \
+    # if dir="a/b/c/d/e" => current=a, next=b/c/d/e"
+    current=${dir%%/*}
+    next=${dir#*/}
+    if [ $current == $dir ]; then
+        next=""
+    fi
+    
+    # echo ">>> current=$current, next=$next" 1>&2
+    # cloc_dirs recursively and do "cloc"
+    if [ "$next" = "" ];then
+        if [ $FLAG_DIR ]; then
+            git_ls_tree_dir $tree_hash | \
             while read d h
-            do  
-                if [ "$next" = "" ]; then
-                    if [ $FLAG_DIR ]; then
-                        cloc_subdirs "$bdir/$d" $h
-                    else
-                        cloc_custom "$bdir/$d" $h
-                    fi
-                else
-                    cloc_dirs "$bdir/$d" $h $next
-                fi
+            do
+                cloc_custom "$1/$d" $h
             done
+        else
+            cloc_custom "$pdir" $h
         fi
-    done
+    else
+        next_dir=${next%%/*}
+        # echo ">>> change directory to $next_dir with dir=$next " 1>&2
+        git_ls_tree_dir $tree_hash | grep -F $next_dir  | \
+        while read d h
+        do  
+            cloc_dirs "$pdir/$d" $h $next
+        done
+    fi
 }
 
 if [ $FLAG_CSV ]; then
@@ -126,9 +98,18 @@ if [ $FLAG_CSV ]; then
 fi
 
 # base directory name for exploring
-base_dir=`pwd`
-base_dir=`basename $base_dir`
+pwd_dir=`pwd`
+base_dir=`basename $pwd_dir`
 
-cloc_dirs $base_dir $@
+base_hash=$1
+for d in ${@:2}; do
+    # get a formatted relative path by realpath
+    # e.g.
+    # $ cd ./src
+    # $ realpath --relative-to=.. ./gpu/./vulkan/././././win32 
+    # src/gpu/vulkan/win32
+    dir=`realpath --relative-to=.. $d`
+    cloc_dirs $base_dir $base_hash $dir
+done
 
 
