@@ -35,7 +35,7 @@ shift $((OPTIND - 1))
 
 
 cloc_custom(){
-    # cloc_custom parent_dir:$1 tree_hash:$2
+    # echo cloc_custom parent_dir:$1 tree_hash:$2 1>&2
     opt=" "
     if [ $FLAG_CSV ]; then
         opt="$opt --csv"
@@ -43,13 +43,12 @@ cloc_custom(){
         tail +3 | \
         sed "s@^@$1,@"
     else
-        echo "$1"
         cloc --git --quiet --timeout=600 $opt $2
     fi
 }
 
 cloc_subdirs(){
-    # echo cloc_subdirs parent_dir:$1 dir:2
+    # echo cloc_subdirs parent_dir:$1 dir:2 1>&2
     # tmp file setup
     tmp_subtree=$(mktemp)
 
@@ -71,7 +70,7 @@ cloc_subdirs(){
 
 
 cloc_dirs(){
-    # echo cloc_dirs parent_dir:$1 three_hash:$2 dirs:${@:3}
+    # echo cloc_dirs parent_dir:$1 three_hash:$2 dirs:${@:3} 1>&2
     bdir=$1
     tree_hash=$2
     dirs=${@:3}
