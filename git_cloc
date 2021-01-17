@@ -45,7 +45,8 @@ cloc_custom(){
     else
         # echo directory name before cloc
         echo "$1"
-        cloc --git --quiet --timeout=60 $opt $2
+        cloc --git --quiet --timeout=60 $opt $2 | \
+        tail +3
     fi
 }
 
