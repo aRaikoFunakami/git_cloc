@@ -39,11 +39,11 @@ cloc_custom(){
     opt=" "
     if [ $FLAG_CSV ]; then
         opt="$opt --csv"
-        cloc --git --quiet --timeout=600 $opt $2 | \
+        cloc --git --quiet --timeout=60 $opt $2 | \
         tail +3 | \
         sed "s@^@$1,@"
     else
-        cloc --git --quiet --timeout=600 $opt $2
+        cloc --git --quiet --timeout=60 $opt $2
     fi
 }
 
