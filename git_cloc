@@ -43,6 +43,8 @@ cloc_custom(){
         tail +3 | \
         sed "s@^@$1,@"
     else
+        # echo directory name before cloc
+        echo "$1"
         cloc --git --quiet --timeout=60 $opt $2
     fi
 }
