@@ -79,7 +79,7 @@ cloc_dirs(){
                 cloc_custom "$1/$d" $h
             done
         else
-            cloc_custom "$pdir" $h
+            cloc_custom "$pdir" $tree_hash
         fi
     else
         next_dir=${next%%/*}
