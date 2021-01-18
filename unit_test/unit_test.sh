@@ -1,11 +1,12 @@
 #!/bin/bash
 
-zlib_hash="2c183c9f93a328bfb3121284da13cf89a0f7e64a"
+zlib_hash='2c183c9f93a328bfb3121284da13cf89a0f7e64a'
 
 if [ -d zlib ]; then
     echo "skip git clone" 1>&2
 else
     git clone https://chromium.googlesource.com/chromium/src/third_party/zlib
+    (cd zlib/ && git checkout $zlib_hash)
 fi
 
 if [ -d out_cloc ]; then
